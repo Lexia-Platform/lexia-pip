@@ -32,7 +32,7 @@ pip install -e .
 ## 📦 Package Information
 
 - **Package Name**: `lexia`
-- **Version**: 1.0.7
+- **Version**: 1.0.8
 - **Python**: >=3.8
 - **License**: MIT
 - **Dependencies**: requests, pydantic
@@ -161,7 +161,7 @@ lexia = LexiaHandler()
 # Create FastAPI app using Lexia's utilities
 app = create_lexia_app(
     title="My AI Agent",
-    version="1.0.7",
+    version="1.0.8",
     description="Custom AI agent with Lexia integration"
 )
 
@@ -250,7 +250,7 @@ class OpenAIAgent:
             self.lexia.send_error(data, str(e))
 
 # Create FastAPI app
-app = create_lexia_app(title="OpenAI Agent", version="1.0.7")
+app = create_lexia_app(title="OpenAI Agent", version="1.0.8")
 
 # Initialize agent
 agent = OpenAIAgent(api_key="your-api-key-here")
@@ -282,7 +282,7 @@ from lexia import (
 
 # Initialize
 lexia = LexiaHandler()
-app = create_lexia_app(title="Custom Agent", version="1.0.7")
+app = create_lexia_app(title="Custom Agent", version="1.0.8")
 
 # Your custom AI logic
 async def process_message(data: ChatMessage):
@@ -306,7 +306,7 @@ async def custom_action(data: ChatMessage):
 @app.get("/api/v1/agent_status")
 async def agent_status():
     """Get agent status."""
-    return {"status": "active", "version": "1.0.7"}
+    return {"status": "active", "version": "1.0.8"}
 
 if __name__ == "__main__":
     import uvicorn
@@ -323,7 +323,7 @@ from lexia.utils import set_env_variables, get_openai_api_key
 
 # Initialize
 lexia = LexiaHandler()
-app = create_lexia_app(title="Config Agent", version="1.0.7")
+app = create_lexia_app(title="Config Agent", version="1.0.8")
 
 async def process_message(data: ChatMessage):
     """Process message with environment configuration."""

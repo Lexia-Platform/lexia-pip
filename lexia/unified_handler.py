@@ -66,38 +66,38 @@ class LexiaHandler:
             logger.info("✅ LEXIA API SUCCESS: Response accepted")
         
         # Update if different URL
-        if data.url_update and data.url_update != data.url:
-            update_data = create_complete_response(data.response_uuid, data.thread_id, full_response, usage_info)
-            update_data['conversation_id'] = data.conversation_id
+        # if data.url_update and data.url_update != data.url:
+        #     update_data = create_complete_response(data.response_uuid, data.thread_id, full_response, usage_info)
+        #     update_data['conversation_id'] = data.conversation_id
             
-            # Ensure update data also has proper usage values
-            if not usage_info or usage_info.get('prompt_tokens', 0) == 0:
-                update_data['usage'] = {
-                    'input_tokens': 1,
-                    'output_tokens': len(full_response.split()) if full_response else 1,
-                    'total_tokens': 1 + (len(full_response.split()) if full_response else 1),
-                    'input_token_details': {
-                        'tokens': [{"token": "default", "logprob": 0.0}]
-                    },
-                    'output_token_details': {
-                        'tokens': [{"token": "default", "logprob": 0.0}]
-                    }
-                }
+        #     # Ensure update data also has proper usage values
+        #     if not usage_info or usage_info.get('prompt_tokens', 0) == 0:
+        #         update_data['usage'] = {
+        #             'input_tokens': 1,
+        #             'output_tokens': len(full_response.split()) if full_response else 1,
+        #             'total_tokens': 1 + (len(full_response.split()) if full_response else 1),
+        #             'input_token_details': {
+        #                 'tokens': [{"token": "default", "logprob": 0.0}]
+        #             },
+        #             'output_token_details': {
+        #                 'tokens': [{"token": "default", "logprob": 0.0}]
+        #             }
+        #         }
             
-            logger.info(f"=== SENDING UPDATE TO LEXIA API ===")
-            logger.info(f"Update URL: {data.url_update}")
-            logger.info(f"Update Data: {update_data}")
+        #     logger.info(f"=== SENDING UPDATE TO LEXIA API ===")
+        #     logger.info(f"Update URL: {data.url_update}")
+        #     logger.info(f"Update Data: {update_data}")
             
-            update_response = self.api.put(data.url_update, update_data)
+        #     update_response = self.api.put(data.url_update, update_data)
             
-            logger.info(f"=== LEXIA UPDATE API RESPONSE ===")
-            logger.info(f"Update Status Code: {update_response.status_code}")
-            logger.info(f"Update Response Content: {update_response.text}")
+        #     logger.info(f"=== LEXIA UPDATE API RESPONSE ===")
+        #     logger.info(f"Update Status Code: {update_response.status_code}")
+        #     logger.info(f"Update Response Content: {update_response.text}")
             
-            if update_response.status_code != 200:
-                logger.error(f"LEXIA UPDATE API ERROR: {update_response.status_code} - {update_response.text}")
-            else:
-                logger.info("✅ LEXIA UPDATE API SUCCESS: Update accepted")
+        #     if update_response.status_code != 200:
+        #         logger.error(f"LEXIA UPDATE API ERROR: {update_response.status_code} - {update_response.text}")
+        #     else:
+        #         logger.info("✅ LEXIA UPDATE API SUCCESS: Update accepted")
     
     def send_error(self, data, error_message: str):
         """Send error message via Centrifugo."""
