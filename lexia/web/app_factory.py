@@ -12,7 +12,7 @@ import logging
 
 def create_lexia_app(
     title: str = "Lexia AI Agent",
-    version: str = "1.0.8",
+    version: str = "1.1.0",
     description: str = "AI agent with Lexia platform integration",
     debug: bool = False
 ) -> FastAPI:

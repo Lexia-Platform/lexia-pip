@@ -175,7 +175,7 @@ python test_package.py
 ✅ Basic Imports PASSED
 
 🔍 Running: Version
-📦 Package version: 1.0.8
+📦 Package version: 1.1.0
 ✅ Version PASSED
 
 🔍 Running: Data Models

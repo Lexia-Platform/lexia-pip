@@ -18,7 +18,7 @@ def create_success_response(response_uuid: str, thread_id: str, message: str = "
     )
 
 
-def create_complete_response(response_uuid: str, thread_id: str, content: str, usage_info=None) -> dict:
+def create_complete_response(response_uuid: str, thread_id: str, content: str, usage_info=None, file_url=None) -> dict:
     """Create a complete response with all required fields for Lexia API."""
     # Calculate default token counts if usage_info is missing
     if not usage_info:
@@ -31,7 +31,7 @@ def create_complete_response(response_uuid: str, thread_id: str, content: str, u
         output_tokens = usage_info.get('completion_tokens', 1)
         total_tokens = usage_info.get('total_tokens', input_tokens + output_tokens)
     
-    return {
+    response_data = {
         'uuid': response_uuid,
         'conversation_id': None,  # Will be set by the handler
         'content': content,
@@ -49,3 +49,9 @@ def create_complete_response(response_uuid: str, thread_id: str, content: str, u
             }
         }
     }
+    
+    # Add file field if provided (for DALL-E generated images)
+    if file_url:
+        response_data['file'] = file_url
+    
+    return response_data

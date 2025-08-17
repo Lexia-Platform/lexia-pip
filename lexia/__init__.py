@@ -6,7 +6,7 @@ Clean, minimal package for Lexia platform integration.
 Contains only essential components for communication.
 """
 
-__version__ = "1.0.8"
+__version__ = "1.1.0"
 
 from .models import ChatResponse, ChatMessage, Variable
 from .response_handler import create_success_response

@@ -28,6 +28,18 @@ class CentrifugoClient:
         
         logger.info(f"Centrifugo client initialized with URL: {self.url}")
     
+    def update_config(self, url: str, api_key: str):
+        """
+        Update the Centrifugo configuration dynamically.
+        
+        Args:
+            url: New Centrifugo server URL
+            api_key: New Centrifugo API key
+        """
+        self.url = url
+        self.api_key = api_key
+        logger.info(f"Centrifugo client configuration updated - URL: {self.url}")
+    
     def send(self, channel: str, data: Dict[str, Any]):
         """
         Send data to a Centrifugo channel.

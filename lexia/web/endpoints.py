@@ -33,7 +33,7 @@ def add_standard_endpoints(app, conversation_manager=None, lexia_handler=None, p
         return {
             "status": "healthy", 
             "service": "Lexia AI Agent",
-            "version": "1.0.8"
+            "version": "1.1.0"
         }
     
     @router.get("/")

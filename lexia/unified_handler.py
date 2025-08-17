@@ -20,17 +20,39 @@ class LexiaHandler:
         self.centrifugo = CentrifugoClient()
         self.api = APIClient()
     
+    def update_centrifugo_config(self, stream_url: str, stream_token: str):
+        """
+        Update Centrifugo configuration with dynamic values from request.
+        
+        Args:
+            stream_url: Centrifugo server URL from request
+            stream_token: Centrifugo API key from request
+        """
+        if stream_url and stream_token:
+            self.centrifugo.update_config(stream_url, stream_token)
+            logger.info(f"Updated Centrifugo config - URL: {stream_url}")
+        else:
+            logger.warning("Stream URL or token not provided, using default configuration")
+    
     def stream_chunk(self, data, content: str):
         """Stream a chunk of AI response via Centrifugo."""
+        # Update config if dynamic values are provided
+        if hasattr(data, 'stream_url') and hasattr(data, 'stream_token'):
+            self.update_centrifugo_config(data.stream_url, data.stream_token)
+        
         self.centrifugo.send_delta(data.channel, data.response_uuid, data.thread_id, content)
     
-    def complete_response(self, data, full_response: str, usage_info=None):
+    def complete_response(self, data, full_response: str, usage_info=None, file_url=None):
         """Complete AI response and send to Lexia (all in one call)."""
+        # Update config if dynamic values are provided
+        if hasattr(data, 'stream_url') and hasattr(data, 'stream_token'):
+            self.update_centrifugo_config(data.stream_url, data.stream_token)
+        
         # Send completion via Centrifugo
         self.centrifugo.send_completion(data.channel, data.response_uuid, data.thread_id, full_response)
         
         # Create complete response with all required fields
-        backend_data = create_complete_response(data.response_uuid, data.thread_id, full_response, usage_info)
+        backend_data = create_complete_response(data.response_uuid, data.thread_id, full_response, usage_info, file_url)
         backend_data['conversation_id'] = data.conversation_id
         
         # Ensure required fields have proper values even if usage_info is missing
@@ -101,4 +123,8 @@ class LexiaHandler:
     
     def send_error(self, data, error_message: str):
         """Send error message via Centrifugo."""
+        # Update config if dynamic values are provided
+        if hasattr(data, 'stream_url') and hasattr(data, 'stream_token'):
+            self.update_centrifugo_config(data.stream_url, data.stream_token)
+        
         self.centrifugo.send_error(data.channel, data.response_uuid, data.thread_id, error_message)

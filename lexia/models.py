@@ -38,6 +38,8 @@ class ChatMessage(BaseModel):
     first_message: bool = False
     project_id: str = ""
     project_files: Optional[Any] = None
+    stream_url: Optional[str] = None
+    stream_token: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
