@@ -19,12 +19,12 @@ def read_requirements():
 setup(
     name="lexia",
     version="1.1.0",
-    author="Your Name",
-    author_email="your.email@example.com",
+    author="Lexia Team",
+    author_email="support@lexiaplatform.com",
     description="Clean, minimal package for Lexia platform integration",
     long_description=read_readme(),
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/lexia",
+    url="https://github.com/Xalantico/lexia-pip",
     packages=find_packages(),
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -64,8 +64,8 @@ setup(
     },
     keywords="lexia, ai, chatbot, platform, integration, fastapi, real-time",
     project_urls={
-        "Bug Reports": "https://github.com/yourusername/lexia-platform/issues",
-        "Source": "https://github.com/yourusername/lexia-platform",
-        "Documentation": "https://github.com/yourusername/lexia-platform#readme",
+        "Bug Reports": "https://github.com/Xalantico/lexia-pip/issues",
+        "Source": "https://github.com/Xalantico/lexia-pip",
+        "Documentation": "https://github.com/Xalantico/lexia-pip#readme",
     },
 )
