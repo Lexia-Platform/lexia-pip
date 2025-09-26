@@ -41,11 +41,49 @@ def set_env_variables(variables):
             logger.error(f"Error setting environment variable: {e}")
 
 
+def get_variable_value(variables, variable_name: str) -> Optional[str]:
+    """
+    Extract a specific variable value from variables list by name.
+    
+    Supports both Pydantic models and dictionaries.
+    
+    Args:
+        variables: List of Variable objects or dictionaries from request
+        variable_name: Name of the variable to extract (e.g., "OPENAI_API_KEY")
+        
+    Returns:
+        Variable value string or None if not found
+    """
+    if not variables:
+        logger.warning(f"No variables provided to get_variable_value for '{variable_name}'")
+        return None
+        
+    for var in variables:
+        try:
+            # Handle Pydantic models
+            if hasattr(var, 'name') and hasattr(var, 'value'):
+                if var.name == variable_name:
+                    logger.info(f"Found variable '{variable_name}'")
+                    return var.value
+            # Handle dictionaries
+            elif isinstance(var, dict) and 'name' in var and 'value' in var:
+                if var['name'] == variable_name:
+                    logger.info(f"Found variable '{variable_name}'")
+                    return var['value']
+            else:
+                logger.warning(f"Invalid variable format: {var}")
+        except Exception as e:
+            logger.error(f"Error processing variable: {e}")
+    
+    logger.warning(f"Variable '{variable_name}' not found in variables")
+    return None
+
+
 def get_openai_api_key(variables) -> Optional[str]:
     """
     Extract OpenAI API key from variables list.
     
-    Supports both Pydantic models and dictionaries.
+    This is a convenience function that uses get_variable_value internally.
     
     Args:
         variables: List of Variable objects or dictionaries from request
@@ -53,27 +91,7 @@ def get_openai_api_key(variables) -> Optional[str]:
     Returns:
         OpenAI API key string or None if not found
     """
-    if not variables:
-        logger.warning("No variables provided to get_openai_api_key")
-        return None
-        
-    for var in variables:
-        try:
-            # Handle Pydantic models
-            if hasattr(var, 'name') and hasattr(var, 'value'):
-                if var.name == "OPENAI_API_KEY":
-                    return var.value
-            # Handle dictionaries
-            elif isinstance(var, dict) and 'name' in var and 'value' in var:
-                if var['name'] == "OPENAI_API_KEY":
-                    return var['value']
-            else:
-                logger.warning(f"Invalid variable format: {var}")
-        except Exception as e:
-            logger.error(f"Error processing variable: {e}")
-    
-    logger.warning("OPENAI_API_KEY not found in variables")
-    return None
+    return get_variable_value(variables, "OPENAI_API_KEY")
 
 
 def format_system_prompt(system_message: str = None, project_system_message: str = None) -> str:
