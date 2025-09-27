@@ -210,6 +210,12 @@ if not memory.is_empty():
     pass
 ```
 
+**Supported Memory Formats:**
+- `"memory": []` - Empty array (treated as empty memory)
+- `"memory": {}` - Empty object (treated as empty memory)  
+- `"memory": {"name": "John", "goals": [...]}` - Structured memory
+- `"memory": null` - Null value (treated as empty memory)
+
 ### Response Handler
 Create Lexia-compatible responses:
 

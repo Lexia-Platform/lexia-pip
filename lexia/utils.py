@@ -57,7 +57,7 @@ class MemoryHelper:
         Initialize with memory data from request.
         
         Args:
-            memory_data: Memory object or dictionary from request
+            memory_data: Memory object, dictionary, or list from request
         """
         if memory_data is None:
             self.memory = {}
@@ -67,8 +67,11 @@ class MemoryHelper:
         elif isinstance(memory_data, dict):
             # Dictionary
             self.memory = memory_data
+        elif isinstance(memory_data, list):
+            # Empty list or old format - treat as empty memory
+            self.memory = {}
         else:
-            # Fallback for old format (empty list)
+            # Fallback for any other type
             self.memory = {}
     
     def get_name(self) -> str:

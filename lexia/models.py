@@ -5,7 +5,7 @@ Lexia Models
 Pydantic models for Lexia API communication.
 """
 
-from typing import Optional, List, Any, Dict
+from typing import Optional, List, Any, Dict, Union
 from pydantic import BaseModel
 
 
@@ -43,7 +43,7 @@ class ChatMessage(BaseModel):
     force_search: bool = False
     force_code: Optional[bool] = None
     system_message: Optional[str] = None
-    memory: Memory = Memory()
+    memory: Union[Memory, Dict[str, Any], List] = Memory()
     project_system_message: Optional[str] = None
     first_message: bool = False
     project_id: str = ""
