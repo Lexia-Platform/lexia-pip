@@ -130,9 +130,63 @@ class LexiaHandler:
         #         logger.info("✅ LEXIA UPDATE API SUCCESS: Update accepted")
     
     def send_error(self, data, error_message: str):
-        """Send error message via Centrifugo."""
+        """
+        Send error message via Centrifugo and persist to backend API.
+        
+        Args:
+            data: Request data containing channel, UUID, thread_id, etc.
+            error_message: Error message to send
+        """
         # Update config if dynamic values are provided
         if hasattr(data, 'stream_url') and hasattr(data, 'stream_token'):
             self.update_centrifugo_config(data.stream_url, data.stream_token)
         
+        # Send error notification via Centrifugo (real-time websocket)
         self.centrifugo.send_error(data.channel, data.response_uuid, data.thread_id, error_message)
+        
+        # Also persist error to backend API (like previous implementation)
+        error_response = {
+            'uuid': data.response_uuid,
+            'conversation_id': data.conversation_id,
+            'content': error_message,
+            'role': 'developer',
+            'status': 'FAILED',
+            'usage': {
+                'input_tokens': 0,
+                'output_tokens': 0,
+                'total_tokens': 0,
+                'input_token_details': {
+                    'tokens': []
+                },
+                'output_token_details': {
+                    'tokens': []
+                }
+            }
+        }
+        
+        # Extract headers from request data
+        request_headers = {}
+        if hasattr(data, 'headers') and data.headers:
+            request_headers.update(data.headers)
+            logger.info(f"Extracted headers from request for error: {request_headers}")
+        
+        logger.info(f"=== SENDING ERROR TO LEXIA API ===")
+        logger.info(f"URL: {data.url}")
+        logger.info(f"Headers: {request_headers}")
+        logger.info(f"Error Data: {error_response}")
+        
+        # Send error to Lexia backend with headers
+        try:
+            response = self.api.post(data.url, error_response, headers=request_headers)
+            
+            logger.info(f"=== LEXIA ERROR API RESPONSE ===")
+            logger.info(f"Status Code: {response.status_code}")
+            logger.info(f"Response Headers: {dict(response.headers)}")
+            logger.info(f"Response Content: {response.text}")
+            
+            if response.status_code != 200:
+                logger.error(f"LEXIA ERROR API FAILED: {response.status_code} - {response.text}")
+            else:
+                logger.info("✅ LEXIA ERROR API SUCCESS: Error persisted to backend")
+        except Exception as e:
+            logger.error(f"Failed to persist error to backend API: {e}")

@@ -123,9 +123,12 @@ class CentrifugoClient:
         """
         data = {
             'error': True,
-            'message': error_message,
+            #'message': error_message,
+            'content': "An ERROR occurred",
             'finished': True,
             'uuid': uuid,
-            'thread_id': thread_id
+            'thread_id': thread_id,
+            'status': 'FAILED',
+            'role': 'developer'
         }
         self.send(channel, data)

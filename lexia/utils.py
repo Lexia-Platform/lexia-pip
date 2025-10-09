@@ -199,21 +199,6 @@ class Variables:
         """
         return self._cache.get(variable_name)
     
-    def get_openai_key(self) -> Optional[str]:
-        """Convenience method to get OpenAI API key."""
-        return self.get("OPENAI_API_KEY")
-    
-    def get_anthropic_key(self) -> Optional[str]:
-        """Convenience method to get Anthropic API key."""
-        return self.get("ANTHROPIC_API_KEY")
-    
-    def get_groq_key(self) -> Optional[str]:
-        """Convenience method to get Groq API key."""
-        return self.get("GROQ_API_KEY")
-    
-    def get_database_url(self) -> Optional[str]:
-        """Convenience method to get database URL."""
-        return self.get("DATABASE_URL")
     
     def has(self, variable_name: str) -> bool:
         """
