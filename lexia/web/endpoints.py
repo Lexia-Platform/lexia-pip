@@ -39,6 +39,26 @@ def add_standard_endpoints(app, conversation_manager=None, lexia_handler=None, p
             "version": "1.1.0"
         }
     
+    @router.get("/test_stream")
+    async def test_stream():
+        """Test streaming endpoint to verify browser streaming works."""
+        async def generate():
+            for i in range(10):
+                chunk = f"Chunk {i+1} "
+                yield chunk.encode('utf-8')
+                yield b''  # Force flush
+                await asyncio.sleep(0.3)  # 300ms delay between chunks
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/plain",
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "X-Accel-Buffering": "no",
+                "Connection": "keep-alive"
+            }
+        )
+    
     @router.get("/")
     async def root():
         """Root endpoint with service information."""
@@ -132,54 +152,86 @@ def add_standard_endpoints(app, conversation_manager=None, lexia_handler=None, p
                 logger.info("🔧 Dev mode: Streaming response directly")
                 
                 async def stream_generator():
-                    """Generate streaming response directly from processing."""
+                    """Generate streaming response directly from processing using async queue."""
                     from ..dev_stream_client import DevStreamClient
                     
                     # Clear any existing stream data for this channel
                     DevStreamClient.clear_stream(data.channel)
+                    logger.info(f"🔴 [INIT] Cleared stream for channel: {data.channel}")
                     
-                    # Start processing in background
+                    # CRITICAL: Create queue BEFORE starting background task
+                    queue = DevStreamClient.get_or_create_queue(data.channel)
+                    logger.info(f"🔴 [INIT] Queue created/retrieved: {id(queue)}")
+                    
+                    # CRITICAL: Send initial SSE comment to establish streaming connection
+                    # This forces browsers/proxies to start streaming immediately
+                    yield ": connected\n\n".encode('utf-8')
+                    logger.info(f"🔴 [INIT] Sent initial SSE comment to establish connection")
+                    
+                    # Small delay to ensure the connection is established
+                    await asyncio.sleep(0.01)
+                    
+                    # Start processing in background AFTER queue is ready
+                    logger.info(f"🔴 [INIT] Starting background task for channel: {data.channel}")
                     task = asyncio.create_task(process_message_func(data))
+                    logger.info(f"🔴 [INIT] Background task started")
                     
-                    # Poll the DevStreamClient and yield chunks
-                    last_chunk_count = 0
-                    
-                    while True:
-                        stream_data = DevStreamClient.get_stream(data.channel)
-                        
-                        # Yield new chunks
-                        current_chunk_count = len(stream_data['chunks'])
-                        if current_chunk_count > last_chunk_count:
-                            new_chunks = stream_data['chunks'][last_chunk_count:]
-                            for chunk in new_chunks:
-                                yield chunk
-                            last_chunk_count = current_chunk_count
-                        
-                        # Check if finished
-                        if stream_data['finished']:
-                            if stream_data['error']:
-                                yield f"\n\n❌ Error: {stream_data['error']}"
-                            break
-                        
-                        # Check if task failed
-                        if task.done():
+                    # Wait for chunks from the queue (TRUE REAL-TIME!)
+                    chunk_buffer = ""
+                    chunk_count = 0
+                    try:
+                        logger.info(f"🔴 [10-ENDPOINT] Starting to wait for queue items...")
+                        while True:
+                            # Wait for next item from queue with timeout
                             try:
-                                await task
-                            except Exception as e:
-                                logger.error(f"Task failed: {e}")
-                                yield f"\n\n❌ Error: {str(e)}"
-                            break
-                        
-                        await asyncio.sleep(0.05)  # Check every 50ms
-                    
-                    # Clean up
-                    DevStreamClient.clear_stream(data.channel)
+                                logger.info(f"🔴 [11-ENDPOINT] Waiting for queue.get()...")
+                                event_type, content = await asyncio.wait_for(queue.get(), timeout=30.0)
+                                chunk_count += 1
+                                logger.info(f"🔴 [12-ENDPOINT] Got from queue! Type: {event_type}, Content: '{content}' ({len(content)} chars) - Chunk #{chunk_count}")
+                                
+                                if event_type == 'delta':
+                                    # Add to buffer
+                                    chunk_buffer += content
+                                    
+                                    # Send as SSE format with explicit data: prefix and double newline
+                                    # SSE format forces browsers to process immediately
+                                    sse_chunk = f"data: {content}\n\n"
+                                    chunk_data = sse_chunk.encode('utf-8')
+                                    logger.info(f"🔴 [13-ENDPOINT] About to yield SSE chunk: {len(chunk_data)} bytes")
+                                    yield chunk_data
+                                    logger.info(f"🔴 [14-ENDPOINT] Yielded SSE chunk to HTTP response!")
+                                    
+                                elif event_type == 'complete':
+                                    # Streaming finished
+                                    break
+                                elif event_type == 'error':
+                                    # Error occurred
+                                    error_msg = f"\n\n❌ Error: {content}"
+                                    yield error_msg.encode('utf-8')
+                                    break
+                                    
+                            except asyncio.TimeoutError:
+                                # Check if task is still running
+                                if task.done():
+                                    try:
+                                        await task
+                                    except Exception as e:
+                                        logger.error(f"Task failed: {e}")
+                                        error_msg = f"\n\n❌ Error: {str(e)}"
+                                        yield error_msg.encode('utf-8')
+                                    break
+                    finally:
+                        # Clean up
+                        DevStreamClient.clear_stream(data.channel)
                 
+                # Use SSE format for better browser streaming support
                 return StreamingResponse(
                     stream_generator(),
-                    media_type="text/plain",
+                    media_type="text/event-stream",
                     headers={
-                        "Cache-Control": "no-cache",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "Pragma": "no-cache",
+                        "Expires": "0",
                         "X-Accel-Buffering": "no",
                         "Connection": "keep-alive"
                     }

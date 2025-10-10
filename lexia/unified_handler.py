@@ -67,11 +67,14 @@ class LexiaHandler:
         Stream a chunk of AI response.
         Uses DevStreamClient in dev mode, Centrifugo in production.
         """
+        logger.info(f"🟢 [3-HANDLER] stream_chunk() called with '{content}' ({len(content)} chars)")
+        
         # Update config if dynamic values are provided (production only)
         if not self.dev_mode and hasattr(data, 'stream_url') and hasattr(data, 'stream_token'):
             self.update_centrifugo_config(data.stream_url, data.stream_token)
         
         self.stream_client.send_delta(data.channel, data.response_uuid, data.thread_id, content)
+        logger.info(f"🟢 [4-HANDLER] Chunk sent to stream_client.send_delta()")
     
     def complete_response(self, data, full_response: str, usage_info=None, file_url=None):
         """
