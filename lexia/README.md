@@ -69,8 +69,10 @@ lexia.stream_chunk(data, content)
 # Complete AI response (handles all Lexia communication)
 lexia.complete_response(data, full_response)
 
-# Send error messages
+# Send error messages (with optional trace/exception for logging)
 lexia.send_error(data, error_message)
+# Or with exception for detailed logging:
+lexia.send_error(data, error_message, exception=e)
 ```
 
 ### 2. Data Models
@@ -138,7 +140,7 @@ async def process_message(data: ChatMessage):
         lexia.complete_response(data, response)
         
     except Exception as e:
-        lexia.send_error(data, str(e))
+        lexia.send_error(data, str(e), exception=e)
 
 # Add all standard Lexia endpoints
 add_standard_endpoints(
@@ -299,7 +301,7 @@ async def process_message(data: ChatMessage):
         lexia.complete_response(data, response)
         
     except Exception as e:
-        lexia.send_error(data, str(e))
+        lexia.send_error(data, str(e), exception=e)
 
 # Add endpoints
 add_standard_endpoints(

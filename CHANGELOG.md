@@ -7,12 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.6] - 2025-01-14
+
 ### Added
-- Initial package structure
-- Core Lexia integration components
-- FastAPI web framework support
-- Real-time streaming via Centrifugo
-- Comprehensive documentation and examples
+- Error logging to Lexia backend via `/api/internal/v1/logs` endpoint
+- Enhanced `send_error()` method with optional `trace` and `exception` parameters for detailed error logging
+- Automatic extraction and truncation of stack traces for error logs
+- Support for error level, location tracking, and additional metadata in error logs
+
+### Fixed
+- Fixed Centrifugo client to send actual error message instead of hardcoded text
+- Fixed dev mode error streaming to match normal response flow (delta + complete)
+- Improved error message visibility in both dev and production modes
 
 ## [1.1.0] - 2025-08-18
 

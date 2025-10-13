@@ -123,8 +123,7 @@ class CentrifugoClient:
         """
         data = {
             'error': True,
-            #'message': error_message,
-            'content': "An ERROR occurred",
+            'content': error_message,
             'finished': True,
             'uuid': uuid,
             'thread_id': thread_id,

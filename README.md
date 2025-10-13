@@ -124,8 +124,12 @@ lexia.stream_chunk(data, content)
 # Complete AI response (handles all Lexia communication)
 lexia.complete_response(data, full_response)
 
-# Send error messages
+# Send error messages (with optional trace/exception for logging)
 lexia.send_error(data, error_message)
+# Or with trace:
+lexia.send_error(data, error_message, trace=traceback_string)
+# Or with exception:
+lexia.send_error(data, error_message, exception=e)
 
 # Update Centrifugo configuration dynamically
 lexia.update_centrifugo_config(stream_url, stream_token)
@@ -310,8 +314,8 @@ async def process_message(data: ChatMessage):
         lexia.complete_response(data, response)
         
     except Exception as e:
-        # Handle errors appropriately
-        lexia.send_error(data, f"Error processing message: {e}")
+        # Handle errors appropriately with trace logging
+        lexia.send_error(data, f"Error processing message: {e}", exception=e)
 
 # Add all standard Lexia endpoints
 add_standard_endpoints(

@@ -8,6 +8,8 @@ Supports both production (Centrifugo) and dev mode (in-memory streaming).
 
 import logging
 import os
+import traceback
+from urllib.parse import urlparse
 from .centrifugo_client import CentrifugoClient
 from .dev_stream_client import DevStreamClient
 from .api_client import APIClient
@@ -179,7 +181,7 @@ class LexiaHandler:
         #     else:
         #         logger.info("✅ LEXIA UPDATE API SUCCESS: Update accepted")
     
-    def send_error(self, data, error_message: str):
+    def send_error(self, data, error_message: str, trace: str = None, exception: Exception = None):
         """
         Send error message via streaming client and persist to backend API.
         Uses DevStreamClient in dev mode, Centrifugo in production.
@@ -187,20 +189,32 @@ class LexiaHandler:
         Args:
             data: Request data containing channel, UUID, thread_id, etc.
             error_message: Error message to send
+            trace: Optional stack trace string
+            exception: Optional exception object (will extract trace from it)
         """
         # Update config if dynamic values are provided (production only)
         if not self.dev_mode and hasattr(data, 'stream_url') and hasattr(data, 'stream_token'):
             self.update_centrifugo_config(data.stream_url, data.stream_token)
         
-        # Send error notification via appropriate streaming client
-        self.stream_client.send_error(data.channel, data.response_uuid, data.thread_id, error_message)
+        # Format error message for display
+        error_display_message = f"❌ **Error:** {error_message}"
         
-        # In dev mode, skip backend API call if URL is not provided
-        if self.dev_mode and (not hasattr(data, 'url') or not data.url):
-            logger.info("🔧 Dev mode: Skipping error API call (no URL provided)")
+        # In DEV mode: Stream exactly like normal responses (chunk + complete)
+        if self.dev_mode:
+            # Stream the error message as chunks (same as normal content)
+            self.stream_client.send_delta(data.channel, data.response_uuid, data.thread_id, error_display_message)
+            # Complete the stream (same as normal completion)
+            self.stream_client.send_completion(data.channel, data.response_uuid, data.thread_id, error_display_message)
+            logger.info("🔧 Dev mode: Error streamed to frontend (delta + complete), skipping backend API calls")
             return
         
-        # Skip if no URL provided
+        # PRODUCTION mode: Different flow for Centrifugo
+        # First stream the error as visible content
+        self.stream_client.send_delta(data.channel, data.response_uuid, data.thread_id, error_display_message)
+        # Then send error signal via Centrifugo
+        self.stream_client.send_error(data.channel, data.response_uuid, data.thread_id, error_message)
+        
+        # Skip if no URL provided (production mode only)
         if not hasattr(data, 'url') or not data.url:
             logger.warning("⚠️  No URL provided, skipping error API call")
             return
@@ -251,3 +265,56 @@ class LexiaHandler:
                 logger.info("✅ LEXIA ERROR API SUCCESS: Error persisted to backend")
         except Exception as e:
             logger.error(f"Failed to persist error to backend API: {e}")
+        
+        # Also send error to logging endpoint (api/internal/v1/logs)
+        try:
+            # Extract base URL from data.url
+            parsed_url = urlparse(data.url)
+            base_url = f"{parsed_url.scheme}://{parsed_url.netloc}"
+            log_url = f"{base_url}/api/internal/v1/logs"
+            
+            # Get stack trace from various sources
+            trace_info = ''
+            if trace:
+                # Use provided trace string
+                trace_info = trace
+            elif exception:
+                # Extract trace from exception object
+                trace_info = ''.join(traceback.format_exception(type(exception), exception, exception.__traceback__))
+            else:
+                # Try to get current exception context
+                exc_info = traceback.format_exc()
+                if exc_info and exc_info != 'NoneType: None\n':
+                    trace_info = exc_info
+            
+            # Prepare log payload according to Laravel API spec
+            log_payload = {
+                'message': error_message[:1000],  # Max 1000 chars as per validation
+                'trace': trace_info[:5000] if trace_info else '',  # Max 5000 chars as per validation
+                'level': 'error',  # error, warning, info, or critical
+                'where': 'lexia-sdk',  # Where the error occurred
+                'additional': {
+                    'uuid': data.response_uuid,
+                    'conversation_id': data.conversation_id,
+                    'thread_id': data.thread_id,
+                    'channel': data.channel
+                }
+            }
+            
+            logger.info(f"=== SENDING ERROR LOG TO LEXIA ===")
+            logger.info(f"Log URL: {log_url}")
+            logger.info(f"Log Payload: {log_payload}")
+            
+            # Send to logging endpoint
+            log_response = self.api.post(log_url, log_payload, headers=request_headers)
+            
+            logger.info(f"=== LEXIA LOG API RESPONSE ===")
+            logger.info(f"Status Code: {log_response.status_code}")
+            logger.info(f"Response Content: {log_response.text}")
+            
+            if log_response.status_code != 200:
+                logger.error(f"LEXIA LOG API FAILED: {log_response.status_code} - {log_response.text}")
+            else:
+                logger.info("✅ LEXIA LOG API SUCCESS: Error logged to backend")
+        except Exception as e:
+            logger.error(f"Failed to send error log to Lexia: {e}")
