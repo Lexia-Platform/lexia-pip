@@ -7,6 +7,7 @@ Supports both production (Centrifugo) and dev mode (in-memory streaming).
 """
 
 import logging
+import threading
 import os
 import traceback
 from urllib.parse import urlparse
@@ -44,6 +45,82 @@ class LexiaHandler:
             logger.info("🚀 LexiaHandler initialized in PRODUCTION MODE (Centrifugo)")
         
         self.api = APIClient()
+        
+        # Internal aggregation buffers keyed by response UUID
+        self._buffers = {}
+        self._buffers_lock = threading.Lock()
+        
+        # Simple alias map to turn semantic commands into Lexia markers
+        self._marker_aliases = {
+            # image
+            'show image load': "[lexia.loading.image.start]\n\n",
+            'end image load': "[lexia.loading.image.end]\n\n",
+            'hide image load': "[lexia.loading.image.end]\n\n",
+            # code
+            'show code load': "[lexia.loading.code.start]\n\n",
+            'end code load': "[lexia.loading.code.end]\n\n",
+            # search
+            'show search load': "[lexia.loading.search.start]\n\n",
+            'end search load': "[lexia.loading.search.end]\n\n",
+            # thinking
+            'show thinking load': "[lexia.loading.thinking.start]\n\n",
+            'end thinking load': "[lexia.loading.thinking.end]\n\n",
+        }
+
+    def _get_loading_marker(self, kind: str, action: str) -> str:
+        """Return a standardized loading marker string for a given kind/action."""
+        kind_norm = (kind or '').strip().lower()
+        if kind_norm not in ("image", "code", "search", "thinking"):
+            kind_norm = "thinking"
+        action_norm = "start" if action == "start" else "end"
+        return f"[lexia.loading.{kind_norm}.{action_norm}]\n\n"
+
+    # Per-response session object to avoid passing data repeatedly
+    class _Session:
+        def __init__(self, handler: 'LexiaHandler', data):
+            self._handler = handler
+            # Keep original request object to preserve headers/urls/ids
+            self._data = data
+            # Optionally preconfigure centrifugo (prod only)
+            if (not handler.dev_mode and 
+                hasattr(data, 'stream_url') and hasattr(data, 'stream_token')):
+                handler.update_centrifugo_config(data.stream_url, data.stream_token)
+
+        def stream(self, content: str) -> None:
+            self._handler.stream(self._data, content)
+
+        def close(self, usage_info=None, file_url=None) -> str:
+            return self._handler.close(self._data, usage_info=usage_info, file_url=file_url)
+
+        def error(self, error_message: str, exception: Exception = None, trace: str = None) -> None:
+            self._handler.send_error(self._data, error_message, trace=trace, exception=exception)
+
+        # Developer-friendly loading helpers
+        def start_loading(self, kind: str = "thinking") -> None:
+            marker = self._handler._get_loading_marker(kind, "start")
+            self._handler.stream(self._data, marker)
+
+        def end_loading(self, kind: str = "thinking") -> None:
+            marker = self._handler._get_loading_marker(kind, "end")
+            self._handler.stream(self._data, marker)
+
+        # Image helper: wrap URL with lexia image markers
+        def image(self, url: str) -> None:
+            if not url:
+                return
+            payload = f"[lexia.image.start]{url}[lexia.image.end]"
+            self._handler.stream(self._data, payload)
+
+        # Alias for developer preference
+        def pass_image(self, url: str) -> None:
+            self.image(url)
+
+    def begin(self, data) -> '_Session':
+        """
+        Start a streaming session bound to a single response.
+        Returns a session with stream()/close()/error() methods.
+        """
+        return LexiaHandler._Session(self, data)
     
     def update_centrifugo_config(self, stream_url: str, stream_token: str):
         """
@@ -78,6 +155,32 @@ class LexiaHandler:
         self.stream_client.send_delta(data.channel, data.response_uuid, data.thread_id, content)
         logger.info(f"🟢 [4-HANDLER] Chunk sent to stream_client.send_delta()")
     
+    # New simplified streaming API: accumulate + stream
+    def stream(self, data, content: str) -> None:
+        """Stream a chunk and aggregate it internally for later completion."""
+        # Normalize semantic commands to markers when possible
+        if isinstance(content, str):
+            key = content.strip().lower()
+            content = self._marker_aliases.get(key, content)
+        
+        # Append to buffer (thread-safe)
+        with self._buffers_lock:
+            bucket = self._buffers.get(getattr(data, 'response_uuid', None))
+            if bucket is None:
+                bucket = []
+                self._buffers[data.response_uuid] = bucket
+            bucket.append(content)
+        # Forward live chunk to clients
+        self.stream_chunk(data, content)
+
+    def _drain_buffer(self, response_uuid: str) -> str:
+        """Join and clear the buffer for a response UUID (thread-safe)."""
+        with self._buffers_lock:
+            parts = self._buffers.pop(response_uuid, None)
+        if not parts:
+            return ""
+        return "".join(parts)
+
     def complete_response(self, data, full_response: str, usage_info=None, file_url=None):
         """
         Complete AI response and send to Lexia.
@@ -180,6 +283,16 @@ class LexiaHandler:
         #         logger.error(f"LEXIA UPDATE API ERROR: {update_response.status_code} - {update_response.text}")
         #     else:
         #         logger.info("✅ LEXIA UPDATE API SUCCESS: Update accepted")
+
+    # New simplified close API: finalize using aggregated buffer
+    def close(self, data, usage_info=None, file_url=None) -> str:
+        """
+        Finalize the response using the internally aggregated content.
+        Returns the finalized full text for optional caller-side persistence.
+        """
+        full_response = self._drain_buffer(getattr(data, 'response_uuid', None))
+        self.complete_response(data, full_response, usage_info, file_url)
+        return full_response
     
     def send_error(self, data, error_message: str, trace: str = None, exception: Exception = None):
         """
@@ -201,6 +314,8 @@ class LexiaHandler:
         
         # In DEV mode: Stream exactly like normal responses (chunk + complete)
         if self.dev_mode:
+            # Clear any pending aggregation for this response
+            self._drain_buffer(getattr(data, 'response_uuid', None))
             # Stream the error message as chunks (same as normal content)
             self.stream_client.send_delta(data.channel, data.response_uuid, data.thread_id, error_display_message)
             # Complete the stream (same as normal completion)
@@ -213,6 +328,8 @@ class LexiaHandler:
         self.stream_client.send_delta(data.channel, data.response_uuid, data.thread_id, error_display_message)
         # Then send error signal via Centrifugo
         self.stream_client.send_error(data.channel, data.response_uuid, data.thread_id, error_message)
+        # Clear any pending aggregation for this response
+        self._drain_buffer(getattr(data, 'response_uuid', None))
         
         # Skip if no URL provided (production mode only)
         if not hasattr(data, 'url') or not data.url:
