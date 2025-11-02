@@ -42,8 +42,7 @@ class ChatMessage(BaseModel):
     url: str
     url_update: str = ""
     url_upload: str = ""
-    force_search: bool = False
-    force_code: Optional[bool] = None
+    force_tools: Optional[List[str]] = None
     system_message: Optional[str] = None
     memory: Union[Memory, Dict[str, Any], List] = Memory()
     project_system_message: Optional[str] = None
@@ -53,6 +52,7 @@ class ChatMessage(BaseModel):
     stream_url: Optional[str] = None
     stream_token: Optional[str] = None
     headers: Optional[Dict[str, str]] = None
+    sleep_time: Optional[int] = None
 
 
 class ChatResponse(BaseModel):

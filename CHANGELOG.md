@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.8] - 2025-11-02
+
+### Added
+- Added `sleep_time` parameter to `ChatMessage` model for configurable timing control
+- Added `force_tools` parameter to `ChatMessage` model (list of tool names like ['code', 'search', 'xyz'])
+- Added `ForceToolsHelper` class for easy access to forced tools with methods like `has()`, `has_code()`, `has_search()`, `get_all()`, etc.
+
+### Removed
+- Removed deprecated `force_search` boolean parameter (replaced by `force_tools`)
+- Removed deprecated `force_code` boolean parameter (replaced by `force_tools`)
+
+### Changed
+- Tool forcing now uses a flexible list-based approach instead of individual boolean flags
+
 ## [1.2.6] - 2025-01-14
 
 ### Added

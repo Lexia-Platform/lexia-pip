@@ -12,6 +12,7 @@ from lexia import (
     ChatMessage, 
     Variable, 
     Memory,
+    ForceToolsHelper,
     create_success_response,
     __version__
 )
@@ -57,7 +58,8 @@ def test_models():
             url="http://test.com",
             url_update="",
             url_upload="",
-            force_search=False,
+            force_tools=["code", "search"],
+            sleep_time=100,
             system_message=None,
             memory=Memory(),
             project_system_message=None,
@@ -66,6 +68,11 @@ def test_models():
             project_files=None
         )
         print(f"✅ ChatMessage model: {message.message}")
+        
+        # Test ForceToolsHelper
+        tools = ForceToolsHelper(message.force_tools)
+        if tools.has_code() and tools.has_search():
+            print(f"✅ ForceToolsHelper: has code and search tools")
         
         return True
     except Exception as e:
