@@ -81,6 +81,9 @@ class LexiaHandler:
             self._handler = handler
             # Keep original request object to preserve headers/urls/ids
             self._data = data
+            # Progressive tracing buffer
+            self._progressive_trace_buffer = None
+            self._progressive_trace_visibility = "all"
             # Optionally preconfigure centrifugo (prod only)
             if (not handler.dev_mode and 
                 hasattr(data, 'stream_url') and hasattr(data, 'stream_token')):
@@ -134,6 +137,106 @@ class LexiaHandler:
             
             payload = f"[lexia.tracing.start]\n- visibility: {visibility}\ncontent: {content}\n[lexia.tracing.end]"
             self._handler.stream(self._data, payload)
+        
+        # Progressive tracing API
+        def tracing_begin(self, message: str, visibility: str = "all") -> None:
+            """
+            Start a progressive trace block that can be built incrementally.
+            
+            Use this when you want to build a single trace entry over time,
+            updating it as progress happens, rather than creating multiple
+            separate trace entries.
+            
+            Args:
+                message: Initial message to start the trace with
+                visibility: Who can see this trace - "all" or "admin" (default: "all")
+            
+            Example:
+                session.tracing_begin("🔄 Processing chunks:", "all")
+                for i in range(10):
+                    session.tracing_append(f"\\n  • Chunk {i+1}/10...")
+                    # ... do work ...
+                    session.tracing_append(f" ✓")
+                session.tracing_end("\\n✅ All done!")
+            """
+            if not message:
+                return
+            
+            # Validate visibility
+            if visibility not in ("all", "admin"):
+                logger.warning(f"Invalid visibility '{visibility}', defaulting to 'all'")
+                visibility = "all"
+            
+            # Initialize progressive trace buffer
+            self._progressive_trace_buffer = message
+            self._progressive_trace_visibility = visibility
+            logger.debug(f"Progressive trace started with visibility '{visibility}'")
+        
+        def tracing_append(self, message: str) -> None:
+            """
+            Append content to the current progressive trace block.
+            
+            Must be called after tracing_begin(). Appends the message to
+            the internal buffer. The complete trace will be sent when
+            tracing_end() is called.
+            
+            Args:
+                message: Content to append to the progressive trace
+            
+            Example:
+                session.tracing_begin("Processing:")
+                session.tracing_append("\\n  - Step 1 done")
+                session.tracing_append("\\n  - Step 2 done")
+                session.tracing_end()
+            """
+            if self._progressive_trace_buffer is None:
+                logger.warning("tracing_append() called without tracing_begin(). Call tracing_begin() first.")
+                return
+            
+            if not message:
+                return
+            
+            # Append to buffer
+            self._progressive_trace_buffer += message
+            logger.debug(f"Appended to progressive trace: {len(message)} chars")
+        
+        def tracing_end(self, message: str = None) -> None:
+            """
+            Complete and send the progressive trace block.
+            
+            Optionally append a final message, then send the complete
+            trace content as a single trace entry.
+            
+            Args:
+                message: Optional final message to append before sending
+            
+            Example:
+                session.tracing_begin("Processing items:")
+                for item in items:
+                    session.tracing_append(f"\\n  • {item}...")
+                    process(item)
+                    session.tracing_append(" ✓")
+                session.tracing_end("\\n✅ Complete!")
+            """
+            if self._progressive_trace_buffer is None:
+                logger.warning("tracing_end() called without tracing_begin(). Nothing to send.")
+                return
+            
+            # Append optional final message
+            if message:
+                self._progressive_trace_buffer += message
+            
+            # Send the complete trace
+            complete_content = self._progressive_trace_buffer
+            visibility = self._progressive_trace_visibility
+            
+            # Clear buffer
+            self._progressive_trace_buffer = None
+            self._progressive_trace_visibility = "all"
+            
+            # Send as a single trace entry
+            self.tracing(complete_content, visibility)
+            logger.debug(f"Progressive trace completed and sent: {len(complete_content)} chars")
 
     def begin(self, data) -> '_Session':
         """
