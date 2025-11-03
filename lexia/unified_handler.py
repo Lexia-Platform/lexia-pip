@@ -115,6 +115,26 @@ class LexiaHandler:
         def pass_image(self, url: str) -> None:
             self.image(url)
 
+        # Tracing helper: wrap content with lexia tracing markers
+        def tracing(self, content: str, visibility: str = "all") -> None:
+            """
+            Send tracing information with visibility control.
+            
+            Args:
+                content: The tracing text content to display
+                visibility: Who can see this trace - "all" or "admin" (default: "all")
+            """
+            if not content:
+                return
+            
+            # Validate visibility parameter
+            if visibility not in ("all", "admin"):
+                logger.warning(f"Invalid visibility '{visibility}', defaulting to 'all'")
+                visibility = "all"
+            
+            payload = f"[lexia.tracing.start]\n- visibility: {visibility}\ncontent: {content}\n[lexia.tracing.end]"
+            self._handler.stream(self._data, payload)
+
     def begin(self, data) -> '_Session':
         """
         Start a streaming session bound to a single response.
