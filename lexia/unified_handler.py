@@ -10,6 +10,7 @@ import logging
 import threading
 import os
 import traceback
+from typing import Any, Dict, List, Optional, Sequence
 from urllib.parse import urlparse
 from .centrifugo_client import CentrifugoClient
 from .dev_stream_client import DevStreamClient
@@ -17,6 +18,116 @@ from .api_client import APIClient
 from .response_handler import create_complete_response
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_button_args(button_defs: Sequence[Dict[str, Any]]) -> Sequence[Dict[str, Any]]:
+    if len(button_defs) == 1 and isinstance(button_defs[0], (list, tuple)):
+        return button_defs[0]
+    return button_defs
+
+
+def _build_button(
+    kind: str,
+    label: Optional[str],
+    row: Optional[int],
+    color: Optional[str],
+    *,
+    url: Optional[str] = None,
+    action_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    kind = (kind or "").strip().lower()
+    if kind not in ("link", "action"):
+        logger.warning("Unsupported button kind '%s'", kind)
+        return None
+
+    label_text = (label or "").strip()
+    if not label_text:
+        logger.warning("Button missing required 'label'")
+        return None
+
+    resolved_row = row if isinstance(row, int) and row > 0 else 1
+
+    button: Dict[str, Any] = {
+        "type": kind,
+        "label": label_text,
+        "row": resolved_row,
+    }
+
+    if color:
+        color_text = str(color).strip()
+        if color_text:
+            button["color"] = color_text
+
+    if kind == "link":
+        url_text = (url or "").strip() if isinstance(url, str) else ""
+        if not url_text:
+            logger.warning("Link button '%s' missing required URL", label_text)
+            return None
+        button["url"] = url_text
+    else:
+        action_text = (action_id or "").strip() if isinstance(action_id, str) else ""
+        if not action_text:
+            logger.warning("Action button '%s' missing required ID", label_text)
+            return None
+        button["id"] = action_text
+
+    return button
+
+
+def _render_button_block(buttons: Sequence[Dict[str, Any]]) -> str:
+    preferred_order = ["label", "id", "url", "color", "row", "tooltip", "description", "icon"]
+    block_lines: List[str] = ["[lexia.buttons.start]"]
+
+    for idx, button in enumerate(buttons):
+        entry_lines = [f"- type: {button['type']}"]
+        entry_lines.append(f"  label: {button['label']}")
+
+        for field in preferred_order:
+            if field == "label":
+                continue
+            if field in button and button[field] is not None:
+                entry_lines.append(f"  {field}: {button[field]}")
+
+        for key, value in button.items():
+            if key in ("type", "label") or key in preferred_order:
+                continue
+            if value is None:
+                continue
+            entry_lines.append(f"  {key}: {value}")
+
+        block_lines.extend(entry_lines)
+        if idx != len(buttons) - 1:
+            block_lines.append("")
+
+    block_lines.append("[lexia.buttons.end]")
+    payload = "\n".join(block_lines)
+    if not payload.endswith("\n"):
+        payload += "\n"
+    return payload
+
+
+def create_link_button_block(label: str, url: str, row: int = 1, color: Optional[str] = None) -> str:
+    """
+    Create a markdown block representing a single link button.
+
+    Returns the `[lexia.buttons.start]` block so callers can stream or reuse it.
+    """
+    button = _build_button("link", label, row, color, url=url)
+    if not button:
+        raise ValueError("Invalid link button definition")
+    return _render_button_block([button])
+
+
+def create_action_button_block(label: str, action_id: str, row: int = 1, color: Optional[str] = None) -> str:
+    """
+    Create a markdown block representing a single action button.
+
+    Returns the `[lexia.buttons.start]` block so callers can stream or reuse it.
+    """
+    button = _build_button("action", label, row, color, action_id=action_id)
+    if not button:
+        raise ValueError("Invalid action button definition")
+    return _render_button_block([button])
 
 
 class LexiaHandler:
@@ -84,6 +195,8 @@ class LexiaHandler:
             # Progressive tracing buffer
             self._progressive_trace_buffer = None
             self._progressive_trace_visibility = "all"
+            # Button helper (preferred API)
+            self.button = LexiaHandler._ButtonHelper(self)
             # Optionally preconfigure centrifugo (prod only)
             if (not handler.dev_mode and 
                 hasattr(data, 'stream_url') and hasattr(data, 'stream_token')):
@@ -113,6 +226,167 @@ class LexiaHandler:
                 return
             payload = f"[lexia.image.start]{url}[lexia.image.end]"
             self._handler.stream(self._data, payload)
+
+        def button_link(self, label: str, url: str, row: int = 1, color: Optional[str] = None) -> None:
+            """Deprecated alias for session.button.link()."""
+            self.button.link(label, url, row=row, color=color)
+
+        def button_action(self, label: str, action_id: str, row: int = 1, color: Optional[str] = None) -> None:
+            """Deprecated alias for session.button.action()."""
+            self.button.action(label, action_id, row=row, color=color)
+
+        def buttons_begin(self, default_row: int = 1, default_color: Optional[str] = None) -> None:
+            """Deprecated alias for session.button.begin()."""
+            self.button.begin(default_row=default_row, default_color=default_color)
+
+        def buttons_add_link(self, label: str, url: str, row: Optional[int] = None, color: Optional[str] = None) -> None:
+            """Deprecated alias for session.button.add_link()."""
+            self.button.add_link(label, url, row=row, color=color)
+
+        def buttons_add_action(self, label: str, action_id: str, row: Optional[int] = None, color: Optional[str] = None) -> None:
+            """Deprecated alias for session.button.add_action()."""
+            self.button.add_action(label, action_id, row=row, color=color)
+
+        def buttons_add_link_button(self, *args, **kwargs) -> None:
+            """Deprecated alias for session.button.add_link()."""
+            self.button.add_link(*args, **kwargs)
+
+        def buttons_add_action_button(self, *args, **kwargs) -> None:
+            """Deprecated alias for session.button.add_action()."""
+            self.button.add_action(*args, **kwargs)
+
+        def buttons_end(self) -> None:
+            """Deprecated alias for session.button.end()."""
+            self.button.end()
+
+        def buttons(self, *button_defs: Dict[str, Any], defaults: Optional[Dict[str, Any]] = None) -> None:
+            """
+            Backwards-compatible helper for dictionary-based button definitions.
+            Prefer button_link/button_action going forward.
+            """
+            if not button_defs:
+                logger.warning("buttons() called with no button definitions")
+                return
+
+            button_iterable = _normalize_button_args(button_defs)
+            default_row = (defaults or {}).get("row", 1)
+            default_color = (defaults or {}).get("color")
+            collected: List[Dict[str, Any]] = []
+
+            for idx, raw_button in enumerate(button_iterable, start=1):
+                if not isinstance(raw_button, dict):
+                    logger.warning("Button %s is not a dictionary: %r", idx, raw_button)
+                    continue
+
+                kind = raw_button.get("type") or raw_button.get("button_type")
+                if not kind:
+                    if "url" in raw_button:
+                        kind = "link"
+                    elif "id" in raw_button:
+                        kind = "action"
+
+                label = raw_button.get("label") or raw_button.get("title") or raw_button.get("text")
+                row = raw_button.get("row", default_row)
+                color = raw_button["color"] if "color" in raw_button else default_color
+
+                if kind == "link":
+                    button = _build_button("link", label, row, color, url=raw_button.get("url"))
+                elif kind == "action":
+                    button = _build_button("action", label, row, color, action_id=raw_button.get("id"))
+                else:
+                    logger.warning("Button %s missing 'type' and could not infer from contents: %r", idx, raw_button)
+                    continue
+
+                if button:
+                    # Include any extra keys not covered by helper
+                    for key, value in raw_button.items():
+                        if key in ("type", "label", "button_type", "title", "text", "id", "url", "row", "color"):
+                            continue
+                        if value is None:
+                            continue
+                        button[key] = value
+                    collected.append(button)
+
+            if not collected:
+                logger.warning("No valid button definitions provided; skipping buttons block.")
+                return
+
+            payload = _render_button_block(collected)
+            self._handler.stream(self._data, payload)
+
+    class _ButtonHelper:
+        """Namespace for button streaming helpers: session.button.*"""
+
+        def __init__(self, session: '_Session'):
+            self._session = session
+            self._pending: Optional[List[Dict[str, Any]]] = None
+            self._defaults: Dict[str, Any] = {"row": 1, "color": None}
+
+        def link(self, label: str, url: str, row: int = 1, color: Optional[str] = None) -> None:
+            """Stream a single link button block immediately."""
+            button = _build_button("link", label, row, color, url=url)
+            if not button:
+                return
+            payload = _render_button_block([button])
+            self._session._handler.stream(self._session._data, payload)
+
+        def action(self, label: str, action_id: str, row: int = 1, color: Optional[str] = None) -> None:
+            """Stream a single action button block immediately."""
+            button = _build_button("action", label, row, color, action_id=action_id)
+            if not button:
+                return
+            payload = _render_button_block([button])
+            self._session._handler.stream(self._session._data, payload)
+
+        def begin(self, default_row: int = 1, default_color: Optional[str] = None) -> None:
+            """Start progressive button collection."""
+            self._pending = []
+            self._defaults = {"row": default_row or 1, "color": default_color}
+            logger.debug("Progressive buttons collection started with defaults: %s", self._defaults)
+
+        def add_link(self, label: str, url: str, row: Optional[int] = None, color: Optional[str] = None) -> None:
+            """Queue a link button during progressive collection."""
+            if self._pending is None:
+                logger.warning("session.button.add_link() called without session.button.begin()")
+                return
+            effective_row = row if row is not None else self._defaults.get("row", 1)
+            effective_color = color if color is not None else self._defaults.get("color")
+            button = _build_button("link", label, effective_row, effective_color, url=url)
+            if button:
+                self._pending.append(button)
+
+        def add_action(self, label: str, action_id: str, row: Optional[int] = None, color: Optional[str] = None) -> None:
+            """Queue an action button during progressive collection."""
+            if self._pending is None:
+                logger.warning("session.button.add_action() called without session.button.begin()")
+                return
+            effective_row = row if row is not None else self._defaults.get("row", 1)
+            effective_color = color if color is not None else self._defaults.get("color")
+            button = _build_button("action", label, effective_row, effective_color, action_id=action_id)
+            if button:
+                self._pending.append(button)
+
+        add_link_button = add_link
+        add_action_button = add_action
+
+        def end(self) -> None:
+            """Finalize and stream the progressive button block."""
+            if self._pending is None:
+                logger.warning("session.button.end() called without session.button.begin()")
+                return
+
+            if not self._pending:
+                logger.warning("session.button.end() called but no buttons were added; skipping block.")
+                self._pending = None
+                self._defaults = {"row": 1, "color": None}
+                return
+
+            payload = _render_button_block(self._pending)
+            self._session._handler.stream(self._session._data, payload)
+
+            self._pending = None
+            self._defaults = {"row": 1, "color": None}
+            logger.debug("Progressive buttons block streamed and cleared.")
 
         # Alias for developer preference
         def pass_image(self, url: str) -> None:

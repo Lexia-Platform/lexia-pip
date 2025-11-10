@@ -82,6 +82,49 @@ session.end_loading("code")
 session.image("https://example.com/image.png")
 ```
 
+**`session.button.link(label: str, url: str, row: int = 1, color: Optional[str] = None)`**
+- Stream a single external link button (color omitted if `None`)
+```python
+session.button.link("Visit Website", "https://example.com")
+session.button.link("Pricing", "https://example.com/pricing", row=2, color="#4F46E5")
+```
+
+**`session.button.action(label: str, action_id: str, row: int = 1, color: Optional[str] = None)`**
+- Stream a single action button (e.g., trigger an agent action by ID)
+```python
+session.button.action("Book Call", "book_call")
+session.button.action("Start DM", "start_dm", row=1, color="#22C55E")
+```
+
+**`session.button.begin(default_row: int = 1, default_color: Optional[str] = None)`**
+- Start progressive button collection (like tracing_begin)
+- Defaults apply to each added button unless overridden
+```python
+session.button.begin(default_row=1, default_color="#6366F1")
+```
+
+**`session.button.add_link(label: str, url: str, row: Optional[int] = None, color: Optional[str] = None)`**
+- Append a link button to the current progressive block
+```python
+session.button.add_link("Visit Website", "https://example.com")
+session.button.add_link("Pricing", "https://example.com/pricing", row=2)
+```
+
+**`session.button.add_action(label: str, action_id: str, row: Optional[int] = None, color: Optional[str] = None)`**
+- Append an action button to the current progressive block
+```python
+session.button.add_action("Message", "start_dm")
+session.button.add_action("Book Call", "book_call", row=2, color="#22C55E")
+```
+
+**`session.button.end()`**
+- Finalize and stream the progressive button list
+```python
+session.button.end()
+```
+
+> Legacy helpers (`session.button_link`, `session.buttons_begin`, etc.) still work but prefer the namespaced `session.button.*` API going forward.
+
 **`tracing(content: str, visibility: str = "all")`**
 - Send trace/debug info
 - Visibility: `"all"` or `"admin"`
@@ -105,6 +148,24 @@ session.tracing_append("\n  - Item 1 done")
 - Complete and send progressive trace
 ```python
 session.tracing_end("\n✅ Complete!")
+```
+
+### Standalone Button Builders
+
+Use these when you need the markdown block without immediately streaming it (e.g., to combine with custom content before sending).
+
+**`create_link_button_block(label: str, url: str, row: int = 1, color: Optional[str] = None)`**
+- Returns a `[lexia.buttons.start]` block string for an external link button
+```python
+block = create_link_button_block("Visit Website", "https://example.com")
+session.stream(block)
+```
+
+**`create_action_button_block(label: str, action_id: str, row: int = 1, color: Optional[str] = None)`**
+- Returns a `[lexia.buttons.start]` block string for an action button
+```python
+block = create_action_button_block("Book Call", "book_call", row=2)
+session.stream(block)
 ```
 
 ---
