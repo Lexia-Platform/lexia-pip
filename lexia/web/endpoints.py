@@ -99,6 +99,7 @@ def add_standard_endpoints(app, conversation_manager=None, lexia_handler=None, p
                 if current_chunk_count > last_chunk_count:
                     new_chunks = stream_data['chunks'][last_chunk_count:]
                     for chunk in new_chunks:
+                        # JSON encode entire payload including content to preserve spaces
                         yield f"data: {json.dumps({'event': 'delta', 'content': chunk})}\n\n"
                     last_chunk_count = current_chunk_count
                 
@@ -251,7 +252,10 @@ def add_standard_endpoints(app, conversation_manager=None, lexia_handler=None, p
                                     
                                     # Send as SSE format with explicit data: prefix and double newline
                                     # SSE format forces browsers to process immediately
-                                    sse_chunk = f"data: {content}\n\n"
+                                    # IMPORTANT: We send plain text, frontend will trim leading spaces (BUG!)
+                                    # Workaround: Prepend zero-width space (\u200b) to preserve spacing
+                                    preserved_content = content if not content.startswith(' ') else '\u200b' + content
+                                    sse_chunk = f"data: {preserved_content}\n\n"
                                     chunk_data = sse_chunk.encode('utf-8')
                                     logger.info(f"🔴 [13-ENDPOINT] About to yield SSE chunk: {len(chunk_data)} bytes")
                                     yield chunk_data

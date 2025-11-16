@@ -314,80 +314,6 @@ class LexiaHandler:
             payload = _render_button_block(collected)
             self._handler.stream(self._data, payload)
 
-    class _ButtonHelper:
-        """Namespace for button streaming helpers: session.button.*"""
-
-        def __init__(self, session: '_Session'):
-            self._session = session
-            self._pending: Optional[List[Dict[str, Any]]] = None
-            self._defaults: Dict[str, Any] = {"row": 1, "color": None}
-
-        def link(self, label: str, url: str, row: int = 1, color: Optional[str] = None) -> None:
-            """Stream a single link button block immediately."""
-            button = _build_button("link", label, row, color, url=url)
-            if not button:
-                return
-            payload = _render_button_block([button])
-            self._session._handler.stream(self._session._data, payload)
-
-        def action(self, label: str, action_id: str, row: int = 1, color: Optional[str] = None) -> None:
-            """Stream a single action button block immediately."""
-            button = _build_button("action", label, row, color, action_id=action_id)
-            if not button:
-                return
-            payload = _render_button_block([button])
-            self._session._handler.stream(self._session._data, payload)
-
-        def begin(self, default_row: int = 1, default_color: Optional[str] = None) -> None:
-            """Start progressive button collection."""
-            self._pending = []
-            self._defaults = {"row": default_row or 1, "color": default_color}
-            logger.debug("Progressive buttons collection started with defaults: %s", self._defaults)
-
-        def add_link(self, label: str, url: str, row: Optional[int] = None, color: Optional[str] = None) -> None:
-            """Queue a link button during progressive collection."""
-            if self._pending is None:
-                logger.warning("session.button.add_link() called without session.button.begin()")
-                return
-            effective_row = row if row is not None else self._defaults.get("row", 1)
-            effective_color = color if color is not None else self._defaults.get("color")
-            button = _build_button("link", label, effective_row, effective_color, url=url)
-            if button:
-                self._pending.append(button)
-
-        def add_action(self, label: str, action_id: str, row: Optional[int] = None, color: Optional[str] = None) -> None:
-            """Queue an action button during progressive collection."""
-            if self._pending is None:
-                logger.warning("session.button.add_action() called without session.button.begin()")
-                return
-            effective_row = row if row is not None else self._defaults.get("row", 1)
-            effective_color = color if color is not None else self._defaults.get("color")
-            button = _build_button("action", label, effective_row, effective_color, action_id=action_id)
-            if button:
-                self._pending.append(button)
-
-        add_link_button = add_link
-        add_action_button = add_action
-
-        def end(self) -> None:
-            """Finalize and stream the progressive button block."""
-            if self._pending is None:
-                logger.warning("session.button.end() called without session.button.begin()")
-                return
-
-            if not self._pending:
-                logger.warning("session.button.end() called but no buttons were added; skipping block.")
-                self._pending = None
-                self._defaults = {"row": 1, "color": None}
-                return
-
-            payload = _render_button_block(self._pending)
-            self._session._handler.stream(self._session._data, payload)
-
-            self._pending = None
-            self._defaults = {"row": 1, "color": None}
-            logger.debug("Progressive buttons block streamed and cleared.")
-
         # Alias for developer preference
         def pass_image(self, url: str) -> None:
             self.image(url)
@@ -511,6 +437,80 @@ class LexiaHandler:
             # Send as a single trace entry
             self.tracing(complete_content, visibility)
             logger.debug(f"Progressive trace completed and sent: {len(complete_content)} chars")
+
+    class _ButtonHelper:
+        """Namespace for button streaming helpers: session.button.*"""
+
+        def __init__(self, session: '_Session'):
+            self._session = session
+            self._pending: Optional[List[Dict[str, Any]]] = None
+            self._defaults: Dict[str, Any] = {"row": 1, "color": None}
+
+        def link(self, label: str, url: str, row: int = 1, color: Optional[str] = None) -> None:
+            """Stream a single link button block immediately."""
+            button = _build_button("link", label, row, color, url=url)
+            if not button:
+                return
+            payload = _render_button_block([button])
+            self._session._handler.stream(self._session._data, payload)
+
+        def action(self, label: str, action_id: str, row: int = 1, color: Optional[str] = None) -> None:
+            """Stream a single action button block immediately."""
+            button = _build_button("action", label, row, color, action_id=action_id)
+            if not button:
+                return
+            payload = _render_button_block([button])
+            self._session._handler.stream(self._session._data, payload)
+
+        def begin(self, default_row: int = 1, default_color: Optional[str] = None) -> None:
+            """Start progressive button collection."""
+            self._pending = []
+            self._defaults = {"row": default_row or 1, "color": default_color}
+            logger.debug("Progressive buttons collection started with defaults: %s", self._defaults)
+
+        def add_link(self, label: str, url: str, row: Optional[int] = None, color: Optional[str] = None) -> None:
+            """Queue a link button during progressive collection."""
+            if self._pending is None:
+                logger.warning("session.button.add_link() called without session.button.begin()")
+                return
+            effective_row = row if row is not None else self._defaults.get("row", 1)
+            effective_color = color if color is not None else self._defaults.get("color")
+            button = _build_button("link", label, effective_row, effective_color, url=url)
+            if button:
+                self._pending.append(button)
+
+        def add_action(self, label: str, action_id: str, row: Optional[int] = None, color: Optional[str] = None) -> None:
+            """Queue an action button during progressive collection."""
+            if self._pending is None:
+                logger.warning("session.button.add_action() called without session.button.begin()")
+                return
+            effective_row = row if row is not None else self._defaults.get("row", 1)
+            effective_color = color if color is not None else self._defaults.get("color")
+            button = _build_button("action", label, effective_row, effective_color, action_id=action_id)
+            if button:
+                self._pending.append(button)
+
+        add_link_button = add_link
+        add_action_button = add_action
+
+        def end(self) -> None:
+            """Finalize and stream the progressive button block."""
+            if self._pending is None:
+                logger.warning("session.button.end() called without session.button.begin()")
+                return
+
+            if not self._pending:
+                logger.warning("session.button.end() called but no buttons were added; skipping block.")
+                self._pending = None
+                self._defaults = {"row": 1, "color": None}
+                return
+
+            payload = _render_button_block(self._pending)
+            self._session._handler.stream(self._session._data, payload)
+
+            self._pending = None
+            self._defaults = {"row": 1, "color": None}
+            logger.debug("Progressive buttons block streamed and cleared.")
 
     def begin(self, data) -> '_Session':
         """
